@@ -1,0 +1,73 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Net;
+using System.Net.Sockets;
+
+namespace DedSecUtil
+{
+    class Program
+    {
+        //Nedded for Sender in DedSecServer
+        static void Scaner()
+        {
+            
+            Console.Clear();
+            UdpClient udp = new UdpClient(14050);
+            while (true)
+            {
+
+                IPEndPoint ipendpoint = null;
+                byte[] message = udp.Receive(ref ipendpoint);
+                Console.WriteLine(Encoding.Default.GetString(message));
+            }
+            }
+            static void Main(string[] args)
+        {           
+            while (true)
+            {
+                Console.Write("Введите IP: ");
+                string t = Console.ReadLine();
+                if (t.ToLower() == "all")
+                {
+                    while (true)
+                    {
+                        // Send message
+                        UdpClient udp = new UdpClient();
+
+                        IPAddress ipaddress = IPAddress.Broadcast;
+                        IPEndPoint ipendpoint = new IPEndPoint(ipaddress, 15000);                    
+                        Console.Write("Введите команду: ");
+                        string msg = Console.ReadLine();
+                        if (msg.ToLower() == "break") break;
+                        else if (msg.ToLower() == "scan") Scaner();
+                        byte[] message = Encoding.Default.GetBytes(msg);
+                        int sended = udp.Send(message, message.Length, ipendpoint);
+                        msg = "";                        
+                        udp.Close();
+                    }
+                }
+                else
+                {
+                    while (true)
+                    {
+                        // Send message
+                        UdpClient udp = new UdpClient();
+
+                        IPAddress ipaddress = IPAddress.Parse(t);
+                        IPEndPoint ipendpoint = new IPEndPoint(ipaddress, 15000);
+                        Console.Write("Введите команду: ");
+                        string msg = Console.ReadLine();
+                        if (msg.ToLower() == "break") break;
+                        byte[] message = Encoding.Default.GetBytes(msg);
+                        int sended = udp.Send(message, message.Length, ipendpoint);
+                        msg = "";
+                        udp.Close();
+                    }
+                }
+            }
+        }
+    }
+}
