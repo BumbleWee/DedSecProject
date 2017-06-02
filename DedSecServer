@@ -15,7 +15,7 @@ using System.Threading;
 using System.Diagnostics;
 using System.Speech.Synthesis;
 
-namespace WindowsService
+namespace DedSecServer
 {
     public class Server
     {
